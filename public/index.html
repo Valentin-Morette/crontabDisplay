@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="fr">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Liste des Cron Jobs</title>
+		<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+		<style>
+			body {
+				background: #0a0a0a;
+				color: #fff;
+				font-family: sans-serif;
+				padding: 2rem;
+			}
+			.cron {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-bottom: 1.5rem;
+				padding: 1rem;
+				background: #1e1e1e;
+				border-left: 5px solid #3a3;
+				border-radius: 0.3rem;
+			}
+			.cron h3 {
+				margin: 0 0 0.5rem;
+				color: #6f6;
+			}
+			.edit,
+			.save,
+			.cancel,
+			.delete {
+				border: none;
+				padding: 0.5rem 1rem;
+				cursor: pointer;
+				margin-right: 0.5rem;
+				border-radius: 0.3rem;
+				font-size: 0.9rem;
+				font-weight: bold;
+			}
+
+			.edit {
+				background: #007bff;
+				color: #fff;
+			}
+			.edit:hover {
+				background: #0056b3;
+			}
+
+			.save {
+				background: #28a745;
+				color: #fff;
+			}
+			.save:hover {
+				background: #218838;
+			}
+
+			.cancel {
+				background: #dc3545;
+				color: #fff;
+			}
+			.cancel:hover {
+				background: #c82333;
+			}
+
+			.delete {
+				background: #dc3545;
+				color: #fff;
+			}
+			.delete:hover {
+				background: #c82333;
+			}
+
+			.editable {
+				border: 1px dashed #6f6;
+				padding: 4px;
+				background-color: #1b2b1b;
+				outline: none;
+			}
+
+			.disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>🕒 Tâches planifiées (crontab)</h1>
+		<div id="crons">Chargement...</div>
+		<button id="addCron" class="edit">Ajouter une tâche</button>
+
+		<script>
+			function renderCrons(crons) {
+				const container = document.getElementById('crons');
+				container.innerHTML = '';
+
+				crons.forEach((cron, index) => {
+					const el = document.createElement('div');
+					el.className = 'cron';
+
+					el.innerHTML = `
+				<div>
+					<h3><span contenteditable="false">${cron.title}</span></h3>
+					<code contenteditable="false">${cron.command}</code>
+				</div>
+				<div class="buttons">
+					<button class="edit">Modifier</button>
+					<button class="save" style="display:none">Valider</button>
+					<button class="cancel" style="display:none">Annuler</button>
+					<button class="delete">Supprimer</button>
+				</div>
+			`;
+
+					const titleEl = el.querySelector('h3 span');
+					const cmdEl = el.querySelector('code');
+					const btnEdit = el.querySelector('.edit');
+					const btnDelete = el.querySelector('.delete');
+
+					btnEdit.onclick = () => {
+						btnEdit.disabled = true;
+						btnDelete.disabled = true;
+						btnDelete.classList.add('disabled');
+						btnEdit.classList.add('disabled');
+
+						titleEl.contentEditable = true;
+						cmdEl.contentEditable = true;
+						titleEl.classList.add('editable');
+						cmdEl.classList.add('editable');
+						titleEl.focus();
+
+						const handleKey = async (e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+
+								titleEl.contentEditable = false;
+								cmdEl.contentEditable = false;
+								titleEl.classList.remove('editable');
+								cmdEl.classList.remove('editable');
+
+								// Supprime l'écouteur
+								titleEl.removeEventListener('keydown', handleKey);
+								cmdEl.removeEventListener('keydown', handleKey);
+
+								// Réactiver les boutons
+								btnEdit.disabled = false;
+								btnDelete.disabled = false;
+								btnDelete.classList.remove('disabled');
+								btnEdit.classList.remove('disabled');
+
+								// Récupère toutes les crons
+								const allCrons = Array.from(document.querySelectorAll('.cron')).map((c) => ({
+									title: c.querySelector('h3 span').textContent.trim(),
+									command: c.querySelector('code').textContent.trim(),
+								}));
+
+								try {
+									await axios.post('/api/cron/update', { crons: allCrons });
+									alert('Tâche mise à jour !');
+								} catch (err) {
+									alert('Erreur lors de la mise à jour');
+									console.error(err);
+								}
+							}
+						};
+
+						// Active la validation sur Entrée
+						titleEl.addEventListener('keydown', handleKey);
+						cmdEl.addEventListener('keydown', handleKey);
+					};
+
+					btnDelete.onclick = async () => {
+						if (!confirm('Supprimer cette tâche ?')) return;
+
+						// Supprimer visuellement
+						el.remove();
+
+						// Récupérer les crons restants
+						const remainingCrons = Array.from(document.querySelectorAll('.cron')).map((c) => ({
+							title: c.querySelector('h3 span').textContent.trim(),
+							command: c.querySelector('code').textContent.trim(),
+						}));
+
+						try {
+							await axios.post('/api/cron/update', { crons: remainingCrons });
+							alert('Tâche supprimée !');
+						} catch (err) {
+							alert('Erreur lors de la suppression');
+							console.error(err);
+						}
+					};
+
+					container.appendChild(el);
+				});
+			}
+
+			document.getElementById('addCron').addEventListener('click', () => {
+				const container = document.getElementById('crons');
+
+				const el = document.createElement('div');
+				el.className = 'cron';
+
+				el.innerHTML = `
+					<div>
+						<h3><span contenteditable="true" class="editable">Nouveau titre</span></h3>
+						<code contenteditable="true" class="editable">* * * * * echo "Hello world"</code>
+					</div>
+					<div class="buttons">
+						<button class="save">Valider</button>
+						<button class="cancel">Annuler</button>
+					</div>
+				`;
+
+				const titleEl = el.querySelector('h3 span');
+				const cmdEl = el.querySelector('code');
+				const btnSave = el.querySelector('.save');
+				const btnCancel = el.querySelector('.cancel');
+
+				// Annuler : supprimer le bloc
+				btnCancel.onclick = () => {
+					el.remove();
+				};
+
+				// Valider : envoyer tous les crons, y compris ce nouveau
+				btnSave.onclick = async () => {
+					titleEl.contentEditable = false;
+					cmdEl.contentEditable = false;
+					titleEl.classList.remove('editable');
+					cmdEl.classList.remove('editable');
+
+					try {
+						const allCrons = Array.from(document.querySelectorAll('.cron')).map((c) => ({
+							title: c.querySelector('h3 span').textContent.trim(),
+							command: c.querySelector('code').textContent.trim(),
+						}));
+
+						await axios.post('/api/cron/update', { crons: allCrons });
+						alert('Tâche ajoutée !');
+						el.remove();
+						renderCrons(allCrons);
+					} catch (err) {
+						alert('Erreur lors de l’ajout');
+						console.error(err);
+					}
+				};
+
+				container.appendChild(el);
+				titleEl.focus();
+			});
+
+			axios
+				.get('/api/crons')
+				.then((res) => renderCrons(res.data.crons))
+				.catch((err) => {
+					document.getElementById('crons').textContent = 'Erreur de chargement.';
+					console.error(err);
+				});
+		</script>
+	</body>
+</html>
